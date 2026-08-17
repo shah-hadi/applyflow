@@ -71,6 +71,12 @@ The repository includes `netlify.toml`. To deploy your own copy:
 4. Add the same production URL to the allowed redirect URLs in Supabase Auth.
 5. Deploy the `main` branch.
 
+## Project documentation
+
+- [Architecture](docs/ARCHITECTURE.md) — authentication, data ownership, application state, and deployment
+- [Contributing](CONTRIBUTING.md) — development workflow and pull-request expectations
+- [Security policy](SECURITY.md) — security model and responsible disclosure
+
 ## Security model
 
 The frontend uses a Supabase publishable key. PostgreSQL row-level security restricts reads and writes to rows owned by the authenticated user. Authentication sessions are managed by Supabase, and private database credentials are not included in this repository.
