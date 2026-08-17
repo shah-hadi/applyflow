@@ -23,6 +23,8 @@ Users create an account or sign in with email and password. Supabase manages the
 
 Application and activity rows include the authenticated user's ID. Row-level security policies enforce ownership for reads, inserts, updates, and deletes. The frontend publishable key does not bypass these policies.
 
+The complete schema is stored as a versioned migration in `supabase/migrations`. It defines both tables, ownership indexes, explicit API grants, the `updated_at` trigger, and policies limited to the `authenticated` role. Keeping the schema in source control makes new environments reproducible and reviewable.
+
 ## Application state
 
 The primary interface loads the signed-in user's records, derives dashboard metrics in the browser, and persists workflow changes directly through the Supabase client. Activities record important changes for the timeline.

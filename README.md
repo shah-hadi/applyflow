@@ -36,7 +36,14 @@ git clone https://github.com/shah-hadi/applyflow.git
 cd applyflow
 npm ci
 cp .env.example .env.local
-npm run dev
+```
+
+Create a Supabase project, then apply the versioned database migration:
+
+```bash
+npx supabase@latest login
+npx supabase@latest link --project-ref your-project-ref
+npx supabase@latest db push
 ```
 
 Set these values in `.env.local`:
@@ -45,6 +52,12 @@ Set these values in `.env.local`:
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_your_key
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
+```
+
+Start the application:
+
+```bash
+npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
@@ -74,6 +87,7 @@ The repository includes `netlify.toml`. To deploy your own copy:
 ## Project documentation
 
 - [Architecture](docs/ARCHITECTURE.md) — authentication, data ownership, application state, and deployment
+- [Database migration](supabase/migrations/20260817204111_create_applyflow_schema.sql) — tables, indexes, grants, and row-level security policies
 - [Contributing](CONTRIBUTING.md) — development workflow and pull-request expectations
 - [Security policy](SECURITY.md) — security model and responsible disclosure
 

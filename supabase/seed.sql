@@ -1,0 +1,2 @@
+-- ApplyFlow does not seed shared records because all application data belongs
+-- to an authenticated user. Add local-only fixtures here when needed.
