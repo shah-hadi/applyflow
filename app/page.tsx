@@ -1,14 +1,18 @@
 "use client";
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
+import { supabase } from "../lib/supabase";
 
 type Stage = "Saved" | "Applied" | "Interview" | "Offer" | "Rejected";
 type Application = { id: number; company: string; role: string; stage: Stage; location: string; jobUrl: string; notes: string; createdAt: string; salary: string; source: string; contact: string; interviewDate: string; deadline: string; nextAction: string };
 type User = { id: string; name: string; email: string };
 type View = "overview" | "applications" | "pipeline" | "analytics" | "settings";
 type Activity = { id: number; applicationId: number; text: string; date: string };
+type DbApplication = Record<string, string | number | null>;
 
 const stages: Stage[] = ["Saved", "Applied", "Interview", "Offer", "Rejected"];
 const emptyForm = { company: "", role: "", stage: "Applied" as Stage, location: "", jobUrl: "", notes: "", salary: "", source: "", contact: "", interviewDate: "", deadline: "", nextAction: "" };
+const fromDb = (row: DbApplication): Application => ({ id: Number(row.id), company: String(row.company), role: String(row.role), stage: row.stage as Stage, location: String(row.location || ""), jobUrl: String(row.job_url || ""), notes: String(row.notes || ""), salary: String(row.salary || ""), source: String(row.source || ""), contact: String(row.contact || ""), interviewDate: String(row.interview_date || ""), deadline: String(row.deadline || ""), nextAction: String(row.next_action || ""), createdAt: String(row.created_at) });
+const toDb = (form: typeof emptyForm) => ({ company: form.company, role: form.role, stage: form.stage, location: form.location, job_url: form.jobUrl, notes: form.notes, salary: form.salary, source: form.source, contact: form.contact, interview_date: form.interviewDate || null, deadline: form.deadline || null, next_action: form.nextAction });
 
 export default function Home() {
   const [applications, setApplications] = useState<Application[]>([]);
@@ -26,15 +30,28 @@ export default function Home() {
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [view, setView] = useState<View>("overview");
   const [activities, setActivities] = useState<Activity[]>([]);
+  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
+  const [auth, setAuth] = useState({ name: "", email: "", password: "" });
+  const [authError, setAuthError] = useState("");
 
   useEffect(() => {
-    Promise.all([fetch("/api/me"), fetch("/api/applications")]).then(async ([meResponse, applicationsResponse]) => {
-      if (!meResponse.ok) return;
-      const { user: authenticatedUser } = await meResponse.json();
-      setUser(authenticatedUser);
-      if (applicationsResponse.ok) setApplications((await applicationsResponse.json()).applications);
-      setTheme(localStorage.getItem(`applyflow.theme.${authenticatedUser.email}`) === "dark" ? "dark" : "light");
-    }).finally(() => setLoaded(true));
+    supabase.auth.getSession().then(async ({ data }) => {
+      const account = data.session?.user;
+      if (account) {
+        const activeUser = { id: account.id, name: String(account.user_metadata.full_name || account.email?.split("@")[0] || "User"), email: account.email || "" };
+        setUser(activeUser);
+        const { data: rows } = await supabase.from("applications").select("*").order("updated_at", { ascending: false });
+        setApplications((rows || []).map((row) => fromDb(row)));
+        const { data: activityRows } = await supabase.from("activities").select("*").order("created_at", { ascending: false }).limit(100);
+        setActivities((activityRows || []).map((row) => ({ id: Number(row.id), applicationId: Number(row.application_id), text: String(row.event_text), date: String(row.created_at) })));
+        setTheme(localStorage.getItem(`applyflow.theme.${activeUser.email}`) === "dark" ? "dark" : "light");
+      }
+      setLoaded(true);
+    });
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session) { setUser(null); setApplications([]); }
+    });
+    return () => listener.subscription.unsubscribe();
   }, []);
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -53,6 +70,7 @@ export default function Home() {
   }
   function record(applicationId: number, text: string) {
     setActivities((items) => [{ id: Date.now(), applicationId, text, date: new Date().toISOString() }, ...items].slice(0, 100));
+    if (user) void supabase.from("activities").insert({ user_id: user.id, application_id: applicationId, event_type: "update", event_text: text });
   }
   function relativeDate(value: string) {
     const days = Math.floor((Date.now() - new Date(value).getTime()) / 86400000);
@@ -60,6 +78,22 @@ export default function Home() {
     if (days === 1) return "Yesterday";
     if (days < 30) return `${days} days ago`;
     return new Date(value).toLocaleDateString();
+  }
+  async function authenticate(event: FormEvent) {
+    event.preventDefault(); setAuthError("");
+    const result = authMode === "signup"
+      ? await supabase.auth.signUp({ email: auth.email.trim(), password: auth.password, options: { data: { full_name: auth.name.trim() }, emailRedirectTo: window.location.origin } })
+      : await supabase.auth.signInWithPassword({ email: auth.email.trim(), password: auth.password });
+    if (result.error) return setAuthError(result.error.message);
+    if (authMode === "signup" && !result.data.session) return setAuthError("Check your email to confirm your account, then sign in.");
+    const account = result.data.user;
+    if (account) {
+      setUser({ id: account.id, name: String(account.user_metadata.full_name || account.email?.split("@")[0] || "User"), email: account.email || "" });
+      setApplications([]); setAuth({ name: "", email: "", password: "" });
+    }
+  }
+  async function logout() {
+    await supabase.auth.signOut(); setUser(null); setApplications([]);
   }
 
   const visible = useMemo(() => applications.filter((item) => {
@@ -75,7 +109,7 @@ export default function Home() {
   if (!loaded) return <main className="loading-screen"><span className="brand-mark">A</span><p>Loading ApplyFlow…</p></main>;
   if (!user) return <main className="auth-shell">
     <section className="auth-brand"><div className="brand auth-logo"><span className="brand-mark">A</span> ApplyFlow</div><div><p className="eyebrow">A CALMER JOB SEARCH</p><h1>Keep every application moving.</h1><p>Track roles, plan follow-ups, prepare for interviews, and keep your search organized in one private workspace.</p></div><div className="auth-proof"><span>✓ Private by default</span><span>✓ Your data follows you</span><span>✓ Export anytime</span></div></section>
-    <section className="auth-panel"><div className="auth-card"><p className="eyebrow">WELCOME</p><h2>Sign in to ApplyFlow</h2><p className="auth-sub">Use your ChatGPT account. ApplyFlow never receives your password.</p><a className="primary auth-submit sign-in-link" href="/signin-with-chatgpt?return_to=%2F">Continue with ChatGPT</a><small className="local-note">Secure sign-in and a private cloud workspace.</small></div></section>
+    <section className="auth-panel"><div className="auth-card"><p className="eyebrow">{authMode === "login" ? "WELCOME BACK" : "CREATE ACCOUNT"}</p><h2>{authMode === "login" ? "Sign in to ApplyFlow" : "Start your workspace"}</h2><p className="auth-sub">Your applications are protected by Supabase authentication and row-level security.</p><form onSubmit={authenticate}>{authMode === "signup" && <label>Full name<input required value={auth.name} onChange={(event) => setAuth({ ...auth, name: event.target.value })} autoComplete="name" /></label>}<label>Email<input required type="email" value={auth.email} onChange={(event) => setAuth({ ...auth, email: event.target.value })} autoComplete="email" /></label><label>Password<input required minLength={8} type="password" value={auth.password} onChange={(event) => setAuth({ ...auth, password: event.target.value })} autoComplete={authMode === "login" ? "current-password" : "new-password"} /></label>{authError && <p className="auth-error" role="alert">{authError}</p>}<button className="primary auth-submit">{authMode === "login" ? "Sign in" : "Create account"}</button></form><p className="auth-switch">{authMode === "login" ? "New here?" : "Already have an account?"} <button onClick={() => { setAuthMode(authMode === "login" ? "signup" : "login"); setAuthError(""); }}>{authMode === "login" ? "Create account" : "Sign in"}</button></p><small className="local-note">Secure authentication powered by Supabase.</small></div></section>
   </main>;
 
   function openForm(application?: Application) {
@@ -88,34 +122,32 @@ export default function Home() {
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (editingId) {
-      const response = await fetch(`/api/applications/${editingId}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(form) });
-      if (!response.ok) return notify("Could not save changes");
-      const { application } = await response.json();
-      setApplications((items) => items.map((item) => item.id === editingId ? application : item)); record(editingId, "Application details updated");
+      const { data, error } = await supabase.from("applications").update(toDb(form)).eq("id", editingId).select().single();
+      if (error) return notify("Could not save changes");
+      setApplications((items) => items.map((item) => item.id === editingId ? fromDb(data) : item)); record(editingId, "Application details updated");
     } else {
-      const response = await fetch("/api/applications", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(form) });
-      if (!response.ok) return notify("Could not add application");
-      const { application } = await response.json();
-      setApplications((items) => [application, ...items]); record(application.id, "Application added");
+      const { data, error } = await supabase.from("applications").insert({ ...toDb(form), user_id: user!.id }).select().single();
+      if (error) return notify("Could not add application");
+      const application = fromDb(data); setApplications((items) => [application, ...items]); record(application.id, "Application added");
     }
     notify(editingId ? "Application updated" : "Application added");
     setForm(emptyForm); setEditingId(null); setDialogOpen(false);
   }
   async function remove(application: Application) {
-    const response = await fetch(`/api/applications/${application.id}`, { method: "DELETE" });
-    if (!response.ok) return notify("Could not delete application");
+    const { error } = await supabase.from("applications").delete().eq("id", application.id);
+    if (error) return notify("Could not delete application");
     setDeleted(application); setApplications((items) => items.filter((item) => item.id !== application.id)); setSelected(null); setConfirmDelete(null); notify("Application deleted");
   }
   async function undoDelete() {
     if (!deleted) return;
-    const response = await fetch("/api/applications", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(deleted) });
-    if (!response.ok) return notify("Could not restore application");
-    const { application } = await response.json();
+    const { data, error } = await supabase.from("applications").insert({ ...toDb(deleted), user_id: user!.id }).select().single();
+    if (error) return notify("Could not restore application");
+    const application = fromDb(data);
     setApplications((items) => [application, ...items]); setDeleted(null); notify("Deletion undone");
   }
   async function changeStage(id: number, nextStage: Stage) {
-    const response = await fetch(`/api/applications/${id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ stage: nextStage }) });
-    if (!response.ok) return notify("Could not move application");
+    const { error } = await supabase.from("applications").update({ stage: nextStage }).eq("id", id);
+    if (error) return notify("Could not move application");
     setApplications((items) => items.map((item) => item.id === id ? { ...item, stage: nextStage } : item)); record(id, `Moved to ${nextStage}`); notify(`Moved to ${nextStage}`);
   }
   function exportCsv() {
@@ -135,11 +167,8 @@ export default function Home() {
         const values = line.match(/(".*?"|[^,]+)(?=,|$)/g)?.map((value) => value.replace(/^"|"$/g, "").replaceAll('""', '"')) || [];
         return { id: Date.now() + index, company: values[0] || "Unknown", role: values[1] || "Role", stage: stages.includes(values[2] as Stage) ? values[2] as Stage : "Applied", location: values[3] || "", jobUrl: values[4] || "", notes: values[5] || "", createdAt: values[6] || new Date().toISOString(), salary: "", source: "", contact: "", interviewDate: "", deadline: "", nextAction: "" };
       });
-      const saved = await Promise.all(imported.map(async (item) => {
-        const response = await fetch("/api/applications", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(item) });
-        return response.ok ? (await response.json()).application : null;
-      }));
-      const successful = saved.filter(Boolean) as Application[];
+      const { data } = await supabase.from("applications").insert(imported.map((item) => ({ ...toDb(item), user_id: user!.id }))).select();
+      const successful = (data || []).map((item) => fromDb(item));
       setApplications((items) => [...successful, ...items]); notify(`Imported ${successful.length} applications`);
     };
     reader.readAsText(file); event.target.value = "";
@@ -164,7 +193,7 @@ export default function Home() {
         </nav>
         <div className="sidebar-bottom">
           <div className="tip"><span>N</span><strong>Quick add</strong><small>Press N anywhere to add an application.</small></div>
-          <div className="profile"><div className="avatar">{user.name.split(" ").map((part) => part[0]).slice(0, 2).join("").toUpperCase()}</div><div><strong>{user.name}</strong><small>{user.email}</small></div><a className="logout" href="/signout-with-chatgpt?return_to=%2F" aria-label="Sign out">↪</a></div>
+          <div className="profile"><div className="avatar">{user.name.split(" ").map((part) => part[0]).slice(0, 2).join("").toUpperCase()}</div><div><strong>{user.name}</strong><small>{user.email}</small></div><button className="logout" onClick={logout} aria-label="Sign out">↪</button></div>
         </div>
       </aside>
       <section className="workspace" id="overview" data-view={view}>

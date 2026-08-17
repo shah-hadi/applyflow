@@ -19,6 +19,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
   title: "ApplyFlow — Job Application Tracker",
   description: "Organize your job search, track every opportunity, and land your next role.",
   openGraph: { title: "ApplyFlow — Job Application Tracker", description: "Turn applications into opportunities.", images: ["/og.png"] },
