@@ -1,0 +1,4 @@
+.panel-actions{display:flex;align-items:center;gap:9px}
+.export{border:1px solid #dedee7;background:white;border-radius:8px;padding:6px 10px;color:#656676;font-size:10px;font-weight:700;cursor:pointer}
+.export:hover{border-color:#8175ec;color:#6556e8}
+@media(max-width:620px){.panel-actions{align-items:flex-end;flex-direction:column}.export{display:none}}

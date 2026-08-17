@@ -1,15 +1,25 @@
-import { desc } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { getDb } from "../../../db";
 import { applications } from "../../../db/schema";
+import { getChatGPTUser } from "../../chatgpt-auth";
+
 export async function GET() {
-  try { return Response.json({ applications: await getDb().select().from(applications).orderBy(desc(applications.createdAt), desc(applications.id)) }); }
-  catch (error) { return Response.json({ error: error instanceof Error ? error.message : "Unable to load applications" }, { status: 500 }); }
+  const user = await getChatGPTUser();
+  if (!user) return Response.json({ error: "Unauthenticated" }, { status: 401 });
+  const rows = await getDb().select().from(applications).where(eq(applications.ownerId, user.userId)).orderBy(desc(applications.updatedAt));
+  return Response.json({ applications: rows });
 }
 export async function POST(request: Request) {
-  try {
-    const body = await request.json() as Record<string, string>;
-    if (!body.company?.trim() || !body.role?.trim()) return Response.json({ error: "Company and role are required" }, { status: 400 });
-    const [application] = await getDb().insert(applications).values({ company: body.company.trim(), role: body.role.trim(), stage: body.stage || "Applied", location: body.location?.trim() || "", jobUrl: body.jobUrl?.trim() || "", notes: body.notes?.trim() || "" }).returning();
-    return Response.json({ application }, { status: 201 });
-  } catch (error) { return Response.json({ error: error instanceof Error ? error.message : "Unable to add application" }, { status: 500 }); }
+  const user = await getChatGPTUser();
+  if (!user) return Response.json({ error: "Unauthenticated" }, { status: 401 });
+  const body = await request.json() as Record<string, string>;
+  if (!body.company?.trim() || !body.role?.trim()) return Response.json({ error: "Company and role are required" }, { status: 400 });
+  const now = new Date().toISOString();
+  const [application] = await getDb().insert(applications).values({
+    ownerId: user.userId, company: body.company.trim(), role: body.role.trim(), stage: body.stage || "Applied",
+    location: body.location || "", jobUrl: body.jobUrl || "", notes: body.notes || "", salary: body.salary || "",
+    source: body.source || "", contact: body.contact || "", interviewDate: body.interviewDate || "",
+    deadline: body.deadline || "", nextAction: body.nextAction || "", createdAt: now, updatedAt: now,
+  }).returning();
+  return Response.json({ application }, { status: 201 });
 }

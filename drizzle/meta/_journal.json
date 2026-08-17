@@ -8,6 +8,13 @@
       "when": 1786992960975,
       "tag": "0000_clear_sway",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1786995108405,
+      "tag": "0001_wandering_psynapse",
+      "breakpoints": true
     }
   ]
 }

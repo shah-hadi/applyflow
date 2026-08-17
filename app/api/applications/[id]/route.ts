@@ -1,9 +1,18 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import { applications } from "../../../../db/schema";
+import { getChatGPTUser } from "../../../chatgpt-auth";
+
+export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
+  const user = await getChatGPTUser(); if (!user) return Response.json({ error: "Unauthenticated" }, { status: 401 });
+  const id = Number((await context.params).id); const body = await request.json() as Record<string, string>;
+  const [application] = await getDb().update(applications).set({ ...body, updatedAt: new Date().toISOString() }).where(and(eq(applications.id, id), eq(applications.ownerId, user.userId))).returning();
+  if (!application) return Response.json({ error: "Not found" }, { status: 404 });
+  return Response.json({ application });
+}
 export async function DELETE(_request: Request, context: { params: Promise<{ id: string }> }) {
-  const numericId = Number((await context.params).id);
-  if (!Number.isInteger(numericId)) return Response.json({ error: "Invalid application ID" }, { status: 400 });
-  try { await getDb().delete(applications).where(eq(applications.id, numericId)); return new Response(null, { status: 204 }); }
-  catch (error) { return Response.json({ error: error instanceof Error ? error.message : "Unable to delete application" }, { status: 500 }); }
+  const user = await getChatGPTUser(); if (!user) return Response.json({ error: "Unauthenticated" }, { status: 401 });
+  const id = Number((await context.params).id);
+  await getDb().delete(applications).where(and(eq(applications.id, id), eq(applications.ownerId, user.userId)));
+  return new Response(null, { status: 204 });
 }
