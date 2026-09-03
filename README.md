@@ -1,13 +1,34 @@
+<div align="center">
+
 # ApplyFlow
+
+**A secure, focused workspace for moving every job opportunity forward.**
 
 [![Netlify Status](https://api.netlify.com/api/v1/badges/ba8f4f23-fcbd-4e75-b9a9-84ea4ef0cd49/deploy-status)](https://app.netlify.com/projects/applyflow-career-tracker/deploys)
 [![CI](https://github.com/shah-hadi/applyflow/actions/workflows/ci.yml/badge.svg)](https://github.com/shah-hadi/applyflow/actions/workflows/ci.yml)
+![Next.js](https://img.shields.io/badge/Next.js-16-000?logo=nextdotjs)
+![TypeScript](https://img.shields.io/badge/TypeScript-Ready-3178C6?logo=typescript&logoColor=white)
+![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-3FCF8E?logo=supabase&logoColor=111)
+[![License: MIT](https://img.shields.io/badge/License-MIT-22c55e.svg)](LICENSE)
 
 A private, full-stack job application tracker for organizing opportunities, follow-ups, interviews, and offers in one focused workspace.
 
-**[View the live app](https://applyflow-career-tracker.netlify.app)**
+[**Open the live application →**](https://applyflow-career-tracker.netlify.app)
 
-![ApplyFlow preview](public/og.png)
+</div>
+
+![ApplyFlow dashboard preview](public/og.png)
+
+## Product tour
+
+| Workspace | Capability |
+| --- | --- |
+| **Pipeline** | Track opportunities across stages, priorities, dates, companies, and contacts |
+| **Follow-ups** | Plan the next action so promising applications do not disappear into a spreadsheet |
+| **Interviews** | Keep preparation notes and important context attached to each opportunity |
+| **Activity** | Review a chronological history of changes and progress |
+| **Analytics** | Understand pipeline totals, stage distribution, and recent momentum |
+| **Portability** | Import and export CSV data without locking information into the product |
 
 ## Highlights
 
@@ -19,6 +40,18 @@ A private, full-stack job application tracker for organizing opportunities, foll
 - CSV import and export for data portability
 - Responsive interface designed for desktop and mobile
 - Production deployment on Netlify
+
+## Architecture
+
+```text
+Browser
+  ↓ authenticated Next.js application
+Supabase Auth
+  ↓ verified user identity
+PostgreSQL + row-level security
+  ↓ user-owned application records
+Dashboard, workflow history, analytics, and CSV tools
+```
 
 ## Tech stack
 
